@@ -7,7 +7,7 @@ format:
     embed-resources: true
 editor: visual
 author: Romaissae Kharrab
-date: February 2026
+date: 08 February 2026
 ---
 
 ```{r setup, include=FALSE}
@@ -36,7 +36,7 @@ library(patchwork)  # This library is very useful to combine multiple plots into
 dataset = read_csv("findex_microdata_2025.csv")
 ```
 
-Population ageing reinforces the importance of households’ financial preparedness for old age, particularly in countries where formal pension systems are limited, fragmented, or largely confined to the formal sector. In this context, remittances constitute a major and relatively stable source of income for many households, playing a central role in poverty reduction, the management of economic shocks, and income security. However, their impact on long-term financial behavior—especially saving for old age—remains ambiguous and insufficiently documented.
+Population ageing reinforces the importance of households’ financial preparedness for old age, particularly in countries where formal pension systems are limited, fragmented, or largely confined to the formal sector. In this context, remittances constitute a major and relatively stable source of income for many households, playing a central role in poverty reduction, the management of economic shocks, and income security. However, their impact on long-term financial behavior, especially saving for old age, remains ambiguous and insufficiently documented.
 
 From a theoretical perspective, the receipt of remittances is likely to alter households’ intertemporal trade-offs. By acting as a form of informal insurance or anticipated income, these transfers may reduce incentives to accumulate savings explicitly intended for retirement. This substitution mechanism is further reinforced by institutional and social factors, such as limited pension coverage, low financial literacy, and norms of intergenerational solidarity, which encourage greater reliance on family networks rather than individual long-term financial planning.
 
@@ -44,9 +44,11 @@ This study therefore addresses the following research question: What is the effe
 
 H1: Households that receive remittances are less likely to save for old age than non-recipient households.
 
-### Descriptive statistics
+## Descriptive Sstatistics
 
-## Key Variables: Remittance Receipt and Saving for Old Age
+### Key variables: Remittance Receipts and Saving for Old Age
+
+Given that remittance receipt is captured through multiple variables in the dataset, we construct a binary indicator (*remittance_any*) to provide a unified measure of households’ exposure to transfers. This variable equals one if the household reports receiving at least one type of remittance (domestic, digital domestic, or international), Sand zero otherwise. Observations with missing responses are treated as non-receipt in the absence of positive information, ensuring a consistent classification across households.
 
 ```{r}
 dataset <- dataset %>%
@@ -80,40 +82,49 @@ dataset <- dataset %>%
 
 ```{r}
 library(ggplot2)
-
-# Plot the distribution of households receiving remittances (any type)
+#  Plot the distribution of households receiving remittances (any type)
 # This bar chart displays the number of households that receive at least one
 # type of remittance versus those that do not.
 
+
 dataset %>%
   # Exclude observations with missing information on remittance receipt
+  # to ensure that counts are based on valid classifications
   filter(!is.na(remittance_any)) %>%
   
-  # Create a bar plot using the remittance indicator as a categorical variable
+  # Create a bar chart using the remittance indicator as a categorical variable
   ggplot(aes(x = factor(remittance_any), fill = factor(remittance_any))) +
-  
   geom_bar() +
   
-  scale_fill_manual(
-    values = c("0" = "#1F3C88", "1" = "#F4C430"),
+  # Replace numeric codes (0 and 1) with meaningful labels on the x-axis
+  scale_x_discrete(
     labels = c("No remittances", "Received remittances")
   ) +
   
+  # Manually specify colors for visual clarity
+  scale_fill_manual(
+    values = c("#1F3C88", "#F4C430")
+  ) +
+  
+  # Add title and axis labels
   labs(
-    title = "Distribution of Households by Remittance Status",
-    x = "Received remittances (any)",
-    y = "Count",
-    fill = "Remittance status"
-  )
+    title = "Figure 1: Distribution of Households by Remittance Status",
+    x = "Remittance status",
+    y = "Count"
+  ) +
+  
+  # Remove the legend since categories are already labeled on the x-axis
+  theme(legend.position = "none")
 
 ```
 
-The distribution shows that most households do not receive remittances, although a non-negligible share reports receiving them.
+As shown in Figure 1, the distribution indicates that most households do not receive remittances, although a non-negligible share reports receiving them.
 
 ```{r}
 dataset %>%
   filter(!is.na(fin17f)) %>%
   mutate(
+    fin17f = as.numeric(fin17f),
     fin17f = recode(
       fin17f,
       `1` = "Yes",
@@ -139,7 +150,7 @@ ggplot(aes(x = fin17f, fill = fin17f)) +
     drop = FALSE
   ) +
   labs(
-    title = "Distribution of Households by Saving for Old Age",
+    title = " Figure 2: Distribution of Households by Saving for Old Age",
     x = "Response",
     y = "Count",
     fill = "Saving status"
@@ -147,7 +158,9 @@ ggplot(aes(x = fin17f, fill = fin17f)) +
 
 ```
 
-The figure shows that most households did not save for old age in the past 12 months, while a smaller but non-negligible share reported having saved. Overall, the distribution points to limited financial preparedness for old age, motivating further analysis of differences in saving behavior, particularly by remittance status.
+The figure 2 shows that most households did not save for old age in the past 12 months, while a smaller but non-negligible share reported having saved. Overall, the distribution points to limited financial preparedness for old age, motivating further analysis of differences in saving behavior, particularly by remittance status.
+
+To capture households’ saving behavior for long-term financial security, we construct a binary indicator (*save_old_age*) based on the survey response variable. The indicator takes the value one if the respondent reports having saved for old age and zero otherwise, allowing for a straightforward comparison of saving outcomes across households.
 
 ```{r}
 library(dplyr)
@@ -157,11 +170,14 @@ library(ggplot2)
 # that receive remittances and those that do not.
 # The figure is purely descriptive and does not imply causality.
 
+dataset <- dataset %>%
+  mutate(save_old_age = as.integer(fin17f == 1))
+
 dataset %>%
   
   # Keep only observations with valid information on
   # remittance receipt and saving for old age
-  filter(!is.na(remittance_any), !is.na(fin17f)) %>%
+  filter(!is.na(remittance_any), !is.na(save_old_age)) %>%
   
   # Recode variables to improve readability and interpretation
   mutate(
@@ -170,15 +186,10 @@ dataset %>%
       remittance_any,
       levels = c(0, 1),
       labels = c("No remittances", "Received remittances")
-    ),
-    
-    # Create a binary indicator for saving for old age
-    # (1 = saved for old age, 0 = did not save)
-    save_old_age = if_else(fin17f == 1, 1, 0)
+    )
   ) %>%
   
   # Compute the share of households saving for old age
-  # separately for remittance recipients and non-recipients
   group_by(remittance_any) %>%
   summarise(
     share_saving_old_age = mean(save_old_age) * 100
@@ -189,64 +200,36 @@ dataset %>%
              y = share_saving_old_age,
              fill = remittance_any)) +
   
-  # Use a bar chart to display the shares
   geom_col(width = 0.6) +
   
-  # Apply a consistent and visually appealing color palette
   scale_fill_manual(
     values = c(
-      "No remittances" = "#1F3C88",      # deep blue
-      "Received remittances" = "#F4C430" # soft gold
+      "No remittances" = "#1F3C88",
+      "Received remittances" = "#F4C430"
     )
   ) +
   
-  # Add a descriptive title and axis labels
   labs(
-    title = "Saving for Old Age by Remittance Status",
+    title = " Figure 3: Saving for Old Age by Remittance Status",
     x = "Remittance status",
-    y = "Share of households saving for old age (%)",
-    fill = "Remittance status"
-  )
+    y = "Share of households saving for old age (%)"
+  ) +
 
+theme(legend.position = "none")
 
 ```
 
-Among households that do not receive remittances, approximately 35–37% report having saved for old age in the past 12 months. By contrast, among remittance-receiving households, this proportion falls to around 25–27%.
+Among households that do not receive remittances, approximately 35–37% report having saved for old age in the past 12 months, whereas among remittance-receiving households this proportion falls to around 25–27% (Figure 3).
 
 ### Control Variables and Descriptive Characteristics
 
-To account for differences in households’ saving behavior, the analysis includes a set of control variables that reflect key demographic, socioeconomic, and contextual characteristics likely to influence both remittance receipt and financial preparedness for old age. Gender is taken into account through an indicator identifying whether the respondent is female, as men and women often differ in their labor market experiences, income stability, access to financial services, and roles in household financial decision-making. Education level is included as a proxy for human capital and financial literacy, since more educated individuals are generally better equipped to plan ahead, understand financial products, and engage in long-term saving.
+To account for differences in households’ saving behavior and to mitigate potential omitted variable bias, the analysis includes a set of control variables that capture key demographic, socioeconomic, and contextual characteristics likely to influence both the probability of receiving remittances and the capacity to save for old age. Gender is included through an indicator identifying whether the respondent is female, as gender differences in labor market participation, migration patterns, access to financial resources, and intra-household decision-making may shape both exposure to remittance flows and long-term saving behavior. Education level is incorporated as a proxy for human capital and financial literacy, since more educated individuals are not only more likely to plan and engage in formal saving but may also be connected to broader migration networks that affect remittance receipt.
 
-The place of residence is also considered through a rural–urban indicator. Living in a rural area is often associated with more limited access to formal financial institutions and pension schemes, as well as a greater reliance on informal support networks, all of which can shape saving behavior and dependence on remittances.Household income is included to capture differences in households’ room to save, as higher income levels allow households to meet current needs more easily and leave greater scope for setting resources aside for the future. At the same time, income shapes how households perceive the role of remittances: for lower-income households, remittances may be essential for day-to-day consumption, whereas for better-off households they may be less central or more easily saved.
+The place of residence is captured through a rural–urban indicator, reflecting structural differences in economic opportunities, migration dynamics, and access to financial institutions. Living in rural areas may increase reliance on remittances while simultaneously constraining access to formal saving instruments. Household income is included to account for differences in financial capacity, as income affects both the likelihood that households receive transfers — often targeted toward lower-income families — and their ability to allocate resources toward long-term saving rather than immediate consumption.
 
-Finally, the analysis incorporates a measure of perceived financial vulnerability, captured by the variable identifying the respondent’s greatest financial worry. This variable reflects how financially constrained or insecure households feel, which can influence both their ability to save and their expectations regarding future support, including remittances. Together, these control variables help provide a clearer picture of the relationship between remittance receipt and saving for old age.
+By conditioning on these variables, the analysis aims to isolate more clearly the relationship between remittance receipt and saving for old age, recognizing that these factors jointly influence both the treatment and the outcome
 
-```{r}
-dataset %>%
-  filter(!is.na(remittance_any),
-         !is.na(fin17f),
-         !is.na(female)) %>%
-  group_by(remittance_any, female) %>%
-  summarise(
-    prop_saved_old_age = mean(fin17f == 1),
-    .groups = "drop"
-  ) %>%
-  ggplot(aes(
-    x = factor(remittance_any,
-               labels = c("No remittances", "Received remittances")),
-    y = prop_saved_old_age
-  )) +
-  geom_col() +
-  facet_wrap(~ female) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  labs(
-    x = "Reception of remittances",
-    y = "Proportion saving for old age",
-    title = "Saving for Old Age and Remittances, Controlling for Gender"
-  ) +
-  theme_minimal()
-
-```
+![](images/clipboard-4112016879.png)
 
 ```{r}
 library(dplyr)
@@ -313,15 +296,16 @@ dataset %>%
   labs(
     x = "Reception of remittances",
     y = "Proportion saving for old age",
-    title = "Saving for Old Age and Remittances, Controlling for Gender"
+    title = "Figure 4: Saving for Old Age and Remittances, Controlling for Gender"
   ) +
+  
   
   theme_minimal(base_size = 12)
 
 
 ```
 
-Conditional on gender, individuals who receive remittances are less likely to save for old age than those who do not receive remittances. This negative association holds for both women and men.
+As shown in Figure 4, conditional on gender, individuals who receive remittances are less likely to save for old age than non-recipients, and this pattern is observed for both women and men.
 
 ```{r}
 
@@ -389,7 +373,7 @@ dataset %>%
   labs(
     x = "Reception of remittances",
     y = "Proportion saving for old age",
-    title = "Saving for Old Age and Remittances, Controlling for Education"
+    title = "Figure 5: Saving for Old Age and Remittances, Controlling for Education"
   ) +
   
   theme(
@@ -471,7 +455,7 @@ dataset %>%
   labs(
     x = "Reception of remittances",
     y = "Proportion saving for old age",
-    title = "Saving for Old Age and Remittances, Controlling for Urbanicity"
+    title = "Figure 6: Saving for Old Age and Remittances, Controlling for Urbanicity"
   ) +
   
  
@@ -479,7 +463,7 @@ dataset %>%
 
 ```
 
-In both rural and urban settings, individuals who receive remittances are less likely to save for old age than those who do not receive remittances. However, the magnitude of this difference is modest and very similar across the two contexts. Although overall saving rates are somewhat higher in urban areas, the relationship between remittance receipt and saving follows the same pattern in both rural and urban groups.
+In both rural and urban settings, individuals who receive remittances are less likely to save for old age than those who do not receive remittances (Figure 6). However, the magnitude of this difference is modest and very similar across the two contexts. Although overall saving rates are somewhat higher in urban areas, the relationship between remittance receipt and saving follows the same pattern in both rural and urban groups.
 
 Overall, the graph shows that the pattern linking remittance receipt to saving for old age is similar in rural and urban areas, with no marked differences between the two settings.
 
@@ -554,7 +538,7 @@ dataset %>%
   labs(
     x = "Reception of remittances",
     y = "Proportion saving for old age",
-    title = "Saving for Old Age and Remittances, Controlling for Income Quintiles"
+    title = "Figure 7: Saving for Old Age and Remittances, Controlling for Income Quintiles"
   ) +
   
   
@@ -573,7 +557,9 @@ dataset %>%
 
 ```
 
-Across all income quintiles (Q1 to Q5), the proportion of households saving for old age is consistently higher among households that do not receive remittances than among those that do. The share of households saving for old age increases with income for both groups, but a persistent gap in favor of non-recipient households is observed in every income quintile.
+Figure 7 shows that across all income quintiles (Q1 to Q5), the proportion of households saving for old age is consistently higher among households that do not receive remittances than among those that do. The share of households saving for old age increases with income for both groups, but a persistent gap in favor of non-recipient households is observed in every income quintile.
+
+It is also particularly insightful to explore how the relationship between remittance receipt and saving for old age differs across world regions, as regional economic structures and financial environments may shape household saving behavior in distinct ways
 
 ```{r}
 library(dplyr)
@@ -582,23 +568,20 @@ library(scales)
 
 dataset %>%
   # Data cleaning
-  # Exclude observations with missing values to avoid distorted proportions
-  #fin45 includes non-informative response categories: 7 = "Don't know"; 8 = "Refused"
-  # These categories do not represent a meaningful financial concern
+  # Exclude observations with missing values to avoid biased proportions
+  # regionwb corresponds to the World Bank regional classification
   filter(
     !is.na(remittance_any),
     !is.na(fin17f),
-    !is.na(fin45),
-    fin45 %in% 1:6
+    !is.na(regionwb)
   ) %>%
- 
   
   # Grouping
   # remittance_any: 0 = no remittances, 1 = received remittances
-  # fin45: greatest financial worry (categorical)
-  group_by(remittance_any, fin45) %>%
+  # regionwb
+  group_by(regionwb, remittance_any) %>%
   
-  #  Compute the proportion of individuals who saved for old age
+  # Compute the proportion of individuals who saved for old age
   # fin17f == 1 → saved for old age
   summarise(
     prop_saved_old_age = mean(fin17f == 1),
@@ -618,42 +601,40 @@ dataset %>%
   # Bar chart
   geom_col(width = 0.65) +
   
-  #  Control for greatest financial worry via facets
+  # Control for region via facets
+  # Region labels are shortened for better readability
   facet_wrap(
-    ~ fin45,
-    nrow = 2,
+    ~ regionwb,
     labeller = as_labeller(c(
-      `1` = "Old age",
-      `2` = "Business",
-      `3` = "Medical costs",
-      `4` = "Monthly expenses",
-      `5` = "School / education fees",
-      `6` = "Other reason"
+      "East Asia & Pacific (excluding high income)" = "East Asia & Pacific",
+      "Europe & Central Asia (excluding high income)" = "Europe & Central Asia",
+      "Latin America & Caribbean (excluding high income)" = "Latin America & Caribbean",
+      "Middle East & North Africa (excluding high income)" = "MENA",
+      "Sub-Saharan Africa (excluding high income)" = "Sub-Saharan Africa",
+      "South Asia" = "South Asia",
+      "High income" = "High income"
     ))
   ) +
   
   scale_fill_manual(
     values = c(
-      "0" = "#0B3C5D",  
-      "1" = "#C9A227"   
+      "0" = "#0B3C5D",
+      "1" = "#C9A227"
     ),
     guide = "none"
   ) +
   
   # Y-axis formatting
   scale_y_continuous(
-    labels = percent_format(accuracy = 1),
-    limits = c(0, 0.6)
+    labels = percent_format(accuracy = 1)
   ) +
-  
   
   labs(
     x = "Reception of remittances",
     y = "Proportion saving for old age",
-    title = "Saving for Old Age and Remittances, by Greatest Financial Worry"
+    title = "Figure 8: Saving for Old Age and Remittances, by World Region"
   ) +
   
- 
   theme_minimal(base_size = 12) +
   theme(
     strip.text = element_text(size = 10, face = "bold"),
@@ -662,6 +643,152 @@ dataset %>%
     plot.title = element_text(face = "bold")
   )
 
+
 ```
 
-Saving for old age varies clearly across types of financial worry, with higher saving rates among individuals worried about old age or medical costs and lower rates among those concerned with monthly expenses or education fees. Within each category, individuals who receive remittances consistently show slightly lower saving rates than those who do not. Overall, the pattern between remittance receipt and saving for old age is similar across all types of financial worry.
+Figure 8 illustrates that individuals receiving remittances do not exhibit a uniform saving pattern across regions. In several regions, including East Asia & Pacific, High-income economies, and MENA, remittance recipients show slightly lower saving rates for old age than non-recipients, suggesting that remittances may partly substitute for formal long-term savings. In Sub-Saharan Africa and Latin America & the Caribbean, saving rates are broadly similar between recipients and non-recipients, indicating a weak association. By contrast, in Europe & Central Asia, individuals receiving remittances display marginally higher saving rates, suggesting that remittance income may in some contexts ease liquidity constraints and support additional saving. Overall, the descriptive evidence reveals substantial regional heterogeneity in the relationship between remittance income and retirement saving behavior.
+
+## Statistical Inference
+
+To move beyond descriptive analysis, this section employs a linear mixed model to examine whether receiving remittances is associated with saving for old age while accounting for the hierarchical structure of the data. Linear mixed models are appropriate when observations are grouped, meaning that subsets of observations share common characteristics — beyond the observed explanatory variables — that may influence the outcome of interest. In this context, individuals are clustered within regions that may share economic, institutional, or social conditions.
+
+This approach allows us to estimate the relationship between remittance receipt and saving behavior while controlling for individual characteristics such as gender, age, education, income, and other relevant covariates, and at the same time capturing unobserved heterogeneity across regions. By incorporating random effects at the regional level, the model accounts for shared contextual factors — such as differences in financial development, institutional environments, or social norms — that may jointly shape remittance dynamics and saving behavior. This framework enables us to assess whether the association between remittance receipt and saving persists once both individual-level characteristics and group-level variation are taken into account.
+
+### Assessment of model assumptions
+
+### Model 1 : Baseline model
+
+We begin with a baseline specification that estimates the simple association between remittance receipt and the probability of saving for old age
+
+```{r}
+
+library(lmerTest)
+
+# Convert categorical variables into factors
+# This ensures that R automatically creates dummy variables
+# when these variables are included in regression models
+
+dataset$regionwb   <- factor(dataset$regionwb)
+dataset$female     <- factor(dataset$female)
+dataset$educ       <- factor(dataset$educ)
+dataset$inc_q      <- factor(dataset$inc_q)
+dataset$urbanicity <- factor(dataset$urbanicity)
+
+
+# Baseline Linear Probability Model (LPM)
+# Dependent variable:
+#   fin17f = 1 if the individual saved for old age
+# Independent variable:
+#   remittance_any = 1 if the individual received remittances
+# This specification estimates the unconditional association
+# between remittance receipt and saving for old age
+model1 <- lmer(
+  save_old_age ~ remittance_any + female + educ + inc_q + urbanicity + (1 | regionwb),
+  data = dataset
+)
+
+# Display regression results
+summary(model1)
+
+```
+
+The results indicate that individuals receiving remittances are approximately 10.8 percentage points more likely to save for old age than non-recipients. This estimated effect is highly statistically significant, with a p-value below 0.001 (p \< 2×10⁻¹⁶), implying that the probability of observing such an association if the true effect were zero is extremely small. Consequently, the null hypothesis of no relationship between remittance receipt and saving for old age can be rejected with very strong statistical confidence. Importantly, this finding contradicts the initial hypothesis, which posited that individuals receiving remittances would be less likely to save for old age, potentially due to reliance on informal financial support.
+
+```{r}
+library(performance)
+check_normality(model1)
+
+
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+dataset <- dataset %>%
+  mutate(save_old_age = ifelse(fin17f == 1, 1, 0))
+
+ggplot(dataset, aes(
+  x = factor(remittance_any,
+             labels = c("No remittances", "Received remittances")),
+  y = save_old_age
+)) +
+  
+  # Individual observations
+  geom_jitter(width = 0.1, height = 0.02, alpha = 0.3) +
+  
+  #difference in means
+  stat_summary(
+    fun = mean,
+    geom = "line",
+    aes(group = 1),
+    color = "red",
+    linewidth = 1.2
+  ) +
+  
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    color = "red",
+    size = 3
+  ) +
+  
+  scale_y_continuous(
+    breaks = c(0,1),
+    labels = c("No", "Yes")
+  ) +
+  
+  labs(
+    x = "Reception of remittances",
+    y = "Saved for old age",
+    title = "Saving for Old Age by Remittance Receipt"
+  ) +
+  
+  theme_minimal()
+```
+
+### Model 2 : Controlled specification
+
+```{r}
+# Convert the region variable into a categorical variable (factor) so that R creates dummy variables automatically in the regression
+dataset$regionwb <- factor(dataset$regionwb)
+# Replace long region names with shorter labels to make regression tables easier to read
+levels(dataset$regionwb) <- c(
+  "EAP",
+  "ECA",
+  "High income",
+  "LAC",
+  "MENA",
+  "South Asia",
+  "SSA"
+)
+
+# This model estimates the association between receiving remittances and saving for old age after controlling for individual characteristics and regional differences
+
+model2 <- lm(
+  fin17f ~ remittance_any + female + age + educ + inc_q + regionwb + urbanicity,
+  data = dataset
+)
+summary(model2)
+```
+
+Once demographic, socioeconomic, and regional controls are included, the coefficient associated with remittance receipt is not statistically different from zero (p = 0.898), implying that we fail to reject the null hypothesis of no effect. In contrast, several control variables emerge as statistically significant predictors of saving for old age. Gender (p \< 0.001) and age (p \< 0.001) are both strongly significant, while education levels also display significant differences (educ2: p = 0.0198; educ3: p \< 0.001). Income categories are mostly significant (inc_q2: p = 0.0195; inc_q4: p = 0.0082; inc_q5: p \< 0.001), although inc_q3 is only weakly significant (p = 0.0826). All regional indicators are highly significant (p \< 0.001), suggesting substantial regional heterogeneity in saving behavior. Urbanicity shows only marginal significance (p = 0.094), whereas the financial concern indicators (fin45 categories) are consistently significant at conventional levels (most p-values \< 0.001). Finally, the overall model is jointly significant according to the F-test (p \< 0.001), indicating that the explanatory variables collectively provide meaningful information about saving behavior.
+
+### Model 3 : Regional interaction specification
+
+To examine whether the effect of remittance receipt on saving for old age varies across different regional contexts, the analysis introduces interaction terms between remittance receipt and world regions in order to capture potential heterogeneity in the relationship.
+
+```{r}
+# This model examines whether the effect of receiving remittances on saving for old age differs across regions.
+model3 <- lm(
+  fin17f ~ remittance_any*regionwb + female + age + educ + inc_q + urbanicity,
+  data = dataset
+)
+
+summary(model3)
+
+```
+
+The interaction specification reveals that the relationship between remittance receipt and saving for old age is not uniform across regions. Using East Asia and the Pacific as the reference category, the coefficient on remittance_any (0.102, p \< 0.001) indicates that, in this region, individuals receiving remittances are approximately 10.2 percentage points more likely to save for old age than non-recipients. However, the interaction terms show that this effect differs substantially across world regions. In several regions, particularly Latin America and the Caribbean (interaction = −0.142, p \< 0.001) and Sub-Saharan Africa (interaction = −0.117, p \< 0.001), the interaction coefficients are negative and statistically significant, implying that the positive baseline effect observed in East Asia and the Pacific is significantly reduced and may even become slightly negative once the regional adjustment is taken into account. In contrast, in regions where the interaction terms are statistically insignificant, the effect of remittances does not differ significantly from that observed in East Asia and the Pacific. Overall, these results provide strong evidence of regional heterogeneity in the association between remittance receipt and saving behavior, suggesting that the economic role of remittances in shaping long-term financial preparedness depends importantly on regional structural conditions rather than being uniform across countries. This regional heterogeneity also helps explain why the previous specification (Model 2) produced an overall insignificant average effect, as positive and negative regional effects may offset each other when pooled together.
+
+Model 3 represents the preferred specification, as it accounts for observable individual characteristics and allows the effect of remittances to vary across regions, thereby capturing potential heterogeneity in the relationship.
