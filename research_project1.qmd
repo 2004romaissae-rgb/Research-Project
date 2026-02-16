@@ -648,25 +648,24 @@ dataset %>%
 
 Figure 8 illustrates that individuals receiving remittances do not exhibit a uniform saving pattern across regions. In several regions, including East Asia & Pacific, High-income economies, and MENA, remittance recipients show slightly lower saving rates for old age than non-recipients, suggesting that remittances may partly substitute for formal long-term savings. In Sub-Saharan Africa and Latin America & the Caribbean, saving rates are broadly similar between recipients and non-recipients, indicating a weak association. By contrast, in Europe & Central Asia, individuals receiving remittances display marginally higher saving rates, suggesting that remittance income may in some contexts ease liquidity constraints and support additional saving. Overall, the descriptive evidence reveals substantial regional heterogeneity in the relationship between remittance income and retirement saving behavior.
 
+Taken together, the descriptive evidence provides preliminary support for the hypothesis that receiving remittances is associated with a lower likelihood of saving for old age, although the strength of this relationship varies across socioeconomic groups and regions.
+
 ## Statistical Inference
 
-To move beyond descriptive analysis, this section employs a linear mixed model to examine whether receiving remittances is associated with saving for old age while accounting for the hierarchical structure of the data. Linear mixed models are appropriate when observations are grouped, meaning that subsets of observations share common characteristics — beyond the observed explanatory variables — that may influence the outcome of interest. In this context, individuals are clustered within regions that may share economic, institutional, or social conditions.
+To move beyond descriptive analysis, this section employs a logistic mixed model to examine whether receiving remittances is associated with saving for old age while accounting for the hierarchical structure of the data and the binary nature of the outcome variable. Logistic mixed models are particularly appropriate when the dependent variable takes discrete values, such as whether an individual saves or not, and when observations are grouped, meaning that subsets of observations share contextual characteristics beyond the observed explanatory variables that may influence the probability of the outcome. In this study, individuals are clustered within regions that may share common economic, institutional, or social environments.
 
-This approach allows us to estimate the relationship between remittance receipt and saving behavior while controlling for individual characteristics such as gender, age, education, income, and other relevant covariates, and at the same time capturing unobserved heterogeneity across regions. By incorporating random effects at the regional level, the model accounts for shared contextual factors — such as differences in financial development, institutional environments, or social norms — that may jointly shape remittance dynamics and saving behavior. This framework enables us to assess whether the association between remittance receipt and saving persists once both individual-level characteristics and group-level variation are taken into account.
+This modelling approach estimates how receiving remittances relates to the probability of saving for old age while controlling for individual characteristics such as gender, age, education, income, and place of residence, and simultaneously accounting for unobserved heterogeneity across regions. By incorporating random effects at the regional level, the model captures shared contextual influences — including differences in financial development, institutional frameworks, or social norms — that may jointly shape remittance dynamics and saving behaviour. This framework allows us to assess whether the relationship between remittance receipt and saving persists once both individual-level determinants and group-level variation are taken into consideration.
+
+As with any econometric model, the use of a logistic mixed model relies on a set of underlying assumptions. The validity of the estimates and the reliability of statistical inference depend on these assumptions being reasonably satisfied. The following section therefore examines these conditions through a series of appropriate diagnostic checks.
 
 ### Assessment of model assumptions
 
-### Model 1 : Baseline model
-
-We begin with a baseline specification that estimates the simple association between remittance receipt and the probability of saving for old age
-
 ```{r}
 
-library(lmerTest)
+library(lme4)
 
-# Convert categorical variables into factors
-# This ensures that R automatically creates dummy variables
-# when these variables are included in regression models
+# Indicate that these variables represent categories (e.g. gender, education, region),
+# so that the model correctly compares groups using appropriate reference categories.
 
 dataset$regionwb   <- factor(dataset$regionwb)
 dataset$female     <- factor(dataset$female)
@@ -675,29 +674,46 @@ dataset$inc_q      <- factor(dataset$inc_q)
 dataset$urbanicity <- factor(dataset$urbanicity)
 
 
-# Baseline Linear Probability Model (LPM)
-# Dependent variable:
-#   fin17f = 1 if the individual saved for old age
-# Independent variable:
-#   remittance_any = 1 if the individual received remittances
-# This specification estimates the unconditional association
-# between remittance receipt and saving for old age
-model1 <- lmer(
-  save_old_age ~ remittance_any + female + educ + inc_q + urbanicity + (1 | regionwb),
-  data = dataset
-)
+# Logistic mixed-effects model
+# The model estimates the association between receiving remittances
+# and the probability of saving for old age, while controlling for
+# gender, education, income quintile, and place of residence.
+# A random intercept is included to allow baseline saving levels
+# to differ across regions.
 
-# Display regression results
-summary(model1)
+model <- glmer(
+  save_old_age ~ remittance_any + female + educ + inc_q + urbanicity + (1 | regionwb),
+  data = dataset,
+  family = binomial(link = "logit")
+)
 
 ```
 
-The results indicate that individuals receiving remittances are approximately 10.8 percentage points more likely to save for old age than non-recipients. This estimated effect is highly statistically significant, with a p-value below 0.001 (p \< 2×10⁻¹⁶), implying that the probability of observing such an association if the true effect were zero is extremely small. Consequently, the null hypothesis of no relationship between remittance receipt and saving for old age can be rejected with very strong statistical confidence. Importantly, this finding contradicts the initial hypothesis, which posited that individuals receiving remittances would be less likely to save for old age, potentially due to reliance on informal financial support.
+#### Residual normality
 
 ```{r}
+# Load package that provides model diagnostic tools
 library(performance)
-check_normality(model1)
 
+# Check whether model residuals follow an approximately normal distribution
+# This helps assess whether statistical inference (p-values, confidence intervals) is reliable
+check_normality(model)
+```
+
+```{r}
+# Load DHARMa package for simulation-based residual diagnostics
+library(DHARMa)
+
+# Simulate standardized residuals from the fitted model
+# This creates residuals that are easier to interpret visually
+sim <- simulateResiduals(model1)
+
+# Plot diagnostic graphs (QQ plot, residual patterns, uniformity check)
+# Look for absence of strong patterns or deviations
+plot(sim)
+
+# Run formal tests for residual problems (e.g., non-uniformity)
+testResiduals(sim)
 
 ```
 
@@ -745,50 +761,79 @@ ggplot(dataset, aes(
   ) +
   
   theme_minimal()
+
 ```
 
-### Model 2 : Controlled specification
+### Empirical Results
+
+After confirming the validity of the model through diagnostic checks, we proceed to discuss the empirical findings.
 
 ```{r}
-# Convert the region variable into a categorical variable (factor) so that R creates dummy variables automatically in the regression
-dataset$regionwb <- factor(dataset$regionwb)
-# Replace long region names with shorter labels to make regression tables easier to read
-levels(dataset$regionwb) <- c(
-  "EAP",
-  "ECA",
-  "High income",
-  "LAC",
-  "MENA",
-  "South Asia",
-  "SSA"
+library(lme4)
+library(modelsummary)
+
+# Unadjusted logistic mixed-effects model
+# This specification estimates the association between receiving remittances
+# and the probability of saving for old age without controlling for other covariates.
+# A random intercept is included to account for differences across regions.
+
+modelb <- glmer(
+  save_old_age ~ remittance_any + (1 | regionwb),
+  data = dataset,
+  family = binomial(link = "logit")
 )
 
-# This model estimates the association between receiving remittances and saving for old age after controlling for individual characteristics and regional differences
 
-model2 <- lm(
-  fin17f ~ remittance_any + female + age + educ + inc_q + regionwb + urbanicity,
-  data = dataset
+# Adjusted logistic mixed-effects model
+# This specification controls for individual characteristics such as gender,
+# education level, income quintile, and place of residence, while allowing
+# baseline saving behavior to vary across regions through a random intercept.
+
+modelc <- glmer(
+  save_old_age ~ remittance_any + female + educ + inc_q + urbanicity + (1 | regionwb),
+  data = dataset,
+  family = binomial(link = "logit")
+)S
+
+# Create a regression table comparing two model specifications:
+# Baseline Model (without control variables)
+# Controlled Model (with control variables)
+# The option exponentiate = TRUE reports coefficients as odds ratios,
+# which are easier to interpret in a logistic model.
+modelsummary(
+  list(
+    "Baseline Model" = modelb,
+    "Controlled Model" = modelc
+  ),
+  exponentiate = TRUE,
+  stars = TRUE,
+  title = "Table 1: Logistic Mixed-Effects Model Results: Saving for Old Age"
 )
-summary(model2)
+
+
+
 ```
 
-Once demographic, socioeconomic, and regional controls are included, the coefficient associated with remittance receipt is not statistically different from zero (p = 0.898), implying that we fail to reject the null hypothesis of no effect. In contrast, several control variables emerge as statistically significant predictors of saving for old age. Gender (p \< 0.001) and age (p \< 0.001) are both strongly significant, while education levels also display significant differences (educ2: p = 0.0198; educ3: p \< 0.001). Income categories are mostly significant (inc_q2: p = 0.0195; inc_q4: p = 0.0082; inc_q5: p \< 0.001), although inc_q3 is only weakly significant (p = 0.0826). All regional indicators are highly significant (p \< 0.001), suggesting substantial regional heterogeneity in saving behavior. Urbanicity shows only marginal significance (p = 0.094), whereas the financial concern indicators (fin45 categories) are consistently significant at conventional levels (most p-values \< 0.001). Finally, the overall model is jointly significant according to the F-test (p \< 0.001), indicating that the explanatory variables collectively provide meaningful information about saving behavior.
+Table 1 reports the estimates from the logistic mixed-effects models, with coefficients expressed as odds ratios and statistical significance assessed using p-values. The baseline specification indicates that receiving remittances is associated with significantly lower odds of saving for old age (OR = 0.891, p \< 0.001), suggesting that households relying on remittance income may have reduced incentives or capacity to accumulate precautionary or retirement savings. This negative association remains remarkably stable in the controlled specification (OR = 0.883, p \< 0.001), even after accounting for gender, education, income, and place of residence, as well as unobserved regional heterogeneity. The stability of this estimate across specifications suggests that the relationship is not primarily driven by observable compositional differences across individuals, but may instead reflect behavioral or institutional mechanisms, such as remittances acting as informal insurance or substituting for formal saving.
 
-### Model 3 : Regional interaction specification
+Turning to individual characteristics, the controlled model reveals that women have significantly higher odds of saving for old age compared to men (OR = 1.171, p \< 0.001), which may reflect differences in risk preferences, financial planning behavior, or exposure to economic vulnerability. Education exhibits a heterogeneous pattern: individuals in the lower education category have significantly lower odds of saving (OR = 0.803, p \< 0.001), consistent with lower financial literacy or income constraints, whereas those in the higher education category show a modest positive association that is only marginally significant (OR = 1.082, p \< 0.10), suggesting that higher educational attainment may encourage forward-looking financial behavior but with some uncertainty.
 
-To examine whether the effect of remittance receipt on saving for old age varies across different regional contexts, the analysis introduces interaction terms between remittance receipt and world regions in order to capture potential heterogeneity in the relationship.
+A pronounced income gradient is evident, with the likelihood of saving increasing steadily across income quintiles. Relative to the lowest quintile, individuals in the second quintile have moderately higher odds of saving (OR = 1.150, p \< 0.05), and this effect strengthens progressively, reaching substantially higher odds in the top quintile (OR = 1.620, p \< 0.001). By contrast, Living in urban areas is associated with slightly lower odds of saving (OR = 0.934, p \< 0.01), which may reflect higher living costs, different financial pressures, or alternative forms of asset holding.
 
-```{r}
-# This model examines whether the effect of receiving remittances on saving for old age differs across regions.
-model3 <- lm(
-  fin17f ~ remittance_any*regionwb + female + age + educ + inc_q + urbanicity,
-  data = dataset
-)
+The model fit statistics provide further insight into the performance and suitability of the specification. First, the estimated standard deviation of the regional random intercept, which captures the extent of variation in baseline saving behavior across regions, is 0.416 in the baseline model and 0.420 in the controlled model, indicating meaningful regional heterogeneity. Consistent with this, the intraclass correlation coefficient (ICC), which measures the proportion of total variation attributable to differences between regions, is approximately 0.10, suggesting that around ten percent of the variation in saving outcomes arises from regional factors.
 
-summary(model3)
+Turning to overall model fit, the controlled model exhibits lower AIC values of 36,256.8 compared to 37,520.2 and lower BIC values of 36,348.5 compared to 37,545.3, indicating an improved fit relative to the baseline specification. Moreover, the marginal R², which reflects the variance explained by observed covariates alone, increases from 0.001 to 0.017, while the conditional R², which captures the variance explained by both covariates and regional effects, rises from 0.051 to 0.067, indicating that the inclusion of individual characteristics improves explanatory power. Finally, the RMSE, which measures the average prediction error, remains stable at 0.45 across specifications, suggesting similar predictive accuracy despite the richer model.
 
-```
+Taken together, these results indicate that the inferential analysis provides support for the hypothesis that receiving remittances is negatively associated with saving for old age, while highlighting the role of socioeconomic factors and regional context in shaping saving behavior.
 
-The interaction specification reveals that the relationship between remittance receipt and saving for old age is not uniform across regions. Using East Asia and the Pacific as the reference category, the coefficient on remittance_any (0.102, p \< 0.001) indicates that, in this region, individuals receiving remittances are approximately 10.2 percentage points more likely to save for old age than non-recipients. However, the interaction terms show that this effect differs substantially across world regions. In several regions, particularly Latin America and the Caribbean (interaction = −0.142, p \< 0.001) and Sub-Saharan Africa (interaction = −0.117, p \< 0.001), the interaction coefficients are negative and statistically significant, implying that the positive baseline effect observed in East Asia and the Pacific is significantly reduced and may even become slightly negative once the regional adjustment is taken into account. In contrast, in regions where the interaction terms are statistically insignificant, the effect of remittances does not differ significantly from that observed in East Asia and the Pacific. Overall, these results provide strong evidence of regional heterogeneity in the association between remittance receipt and saving behavior, suggesting that the economic role of remittances in shaping long-term financial preparedness depends importantly on regional structural conditions rather than being uniform across countries. This regional heterogeneity also helps explain why the previous specification (Model 2) produced an overall insignificant average effect, as positive and negative regional effects may offset each other when pooled together.
+##  **Discussion and Concluding Remarks**
 
-Model 3 represents the preferred specification, as it accounts for observable individual characteristics and allows the effect of remittances to vary across regions, thereby capturing potential heterogeneity in the relationship.
+This study set out to examine whether receiving remittances is associated with saving for old age while accounting for individual characteristics and regional heterogeneity. Overall, the empirical findings provide consistent evidence of a negative association between remittance receipt and the likelihood of saving, and this relationship remains stable across model specifications. This suggests that, within the scope of the analysis, remittances may act as a substitute for formal saving or as a form of informal insurance, reducing the need for households to accumulate precautionary or retirement savings. At the same time, the results highlight the importance of socioeconomic factors, particularly income and gender, in shaping saving behavior, with higher income groups displaying a significantly greater propensity to save.
+
+While a substantial body of literature has examined the role of remittances in poverty reduction, consumption smoothing, and resilience to economic shocks, comparatively less attention has been devoted to their relationship with long-term saving behavior, particularly in the context of retirement planning. In this regard, a key contribution of this study lies in providing empirical evidence on how remittance receipt relates to saving decisions, thereby extending the discussion beyond short-term welfare effects to consider longer-term financial outcomes. By focusing on saving for old age, this analysis offers additional insights into the ways in which remittances may shape household financial strategies over the life cycle.
+
+Several limitations deserve to be acknowledged. First, unobserved factors such as trust in financial and public institutions may simultaneously influence both saving behavior and the likelihood of receiving remittances, potentially introducing bias into the estimates. For instance, households with low levels of trust in the formal financial system may rely more heavily on family transfers rather than formal saving mechanisms, which could affect the observed relationship.
+
+Moreover, the use of cross-sectional data limits the ability to capture the dynamic nature of saving behavior, particularly the intertemporal adjustments households may make in response to income shocks, changes in family circumstances, or evolving expectations about the future. In the absence of longitudinal information, it is difficult to assess how saving patterns evolve over time or to distinguish short-term responses from more persistent behavioral trends.
+
+Another important limitation is that the analysis considers remittance receipt in aggregate terms, without distinguishing between different types of remittances. In practice, transfers can take various forms, including international and domestic remittances, as well as transfers sent through formal or electronic channels, each of which may be associated with different uses and effects on household financial behavior. For example, international remittances, which are often larger and more regular, may play a different role compared to domestic transfers, while the use of electronic channels may be linked to greater financial inclusion. By not differentiating across these dimensions, the analysis may obscure potentially heterogeneous mechanisms. Future research could therefore investigate more closely how the nature, origin, and delivery mode of remittances influence saving decisions, thereby providing a deeper understanding of the channels through which remittances shape long-term financial planning.
