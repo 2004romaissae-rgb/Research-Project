@@ -7,7 +7,7 @@ format:
     embed-resources: true
 editor: visual
 author: Romaissae Kharrab
-date: 08 February 2026
+date: 17 February 2026
 ---
 
 ```{r setup, include=FALSE}
@@ -44,11 +44,11 @@ This study therefore addresses the following research question: What is the effe
 
 H1: Households that receive remittances are less likely to save for old age than non-recipient households.
 
-## Descriptive Sstatistics
+## Descriptive Statistics
 
 ### Key variables: Remittance Receipts and Saving for Old Age
 
-Given that remittance receipt is captured through multiple variables in the dataset, we construct a binary indicator (*remittance_any*) to provide a unified measure of households’ exposure to transfers. This variable equals one if the household reports receiving at least one type of remittance (domestic, digital domestic, or international), Sand zero otherwise. Observations with missing responses are treated as non-receipt in the absence of positive information, ensuring a consistent classification across households.
+Given that remittance receipt is captured through multiple variables in the dataset, we construct a binary indicator (*remittance_any*) to provide a unified measure of households’ exposure to transfers. This variable equals one if the household reports receiving at least one type of remittance (domestic, digital domestic, or international), and zero otherwise. Observations with missing responses are treated as non-receipt in the absence of positive information, ensuring a consistent classification across households.
 
 ```{r}
 dataset <- dataset %>%
@@ -229,7 +229,7 @@ The place of residence is captured through a rural–urban indicator, reflecting
 
 By conditioning on these variables, the analysis aims to isolate more clearly the relationship between remittance receipt and saving for old age, recognizing that these factors jointly influence both the treatment and the outcome
 
-![](images/clipboard-4112016879.png)
+![](images/clipboard-415132311.png)
 
 ```{r}
 library(dplyr)
@@ -681,7 +681,7 @@ dataset$urbanicity <- factor(dataset$urbanicity)
 # A random intercept is included to allow baseline saving levels
 # to differ across regions.
 
-model <- glmer(
+modelc <- glmer(
   save_old_age ~ remittance_any + female + educ + inc_q + urbanicity + (1 | regionwb),
   data = dataset,
   family = binomial(link = "logit")
@@ -689,84 +689,200 @@ model <- glmer(
 
 ```
 
-#### Residual normality
+#### Exogeneity of remittance receipt
+
+We assume that, conditional on observed individual and household characteristics and region-level random effects, remittance receipt is not systematically related to unobserved determinants of saving for old age. While this assumption cannot be tested directly, we attempt to reduce potential bias by including a comprehensive set of control variables.
+
+#### Independence between random effects and covariates
+
+The random intercept captures unobserved regional differences and is assumed to be independent of the explanatory variables included in the model.
+
+#### Correct model specification
+
+We assume that the logistic functional form appropriately captures the relationship between predictors and the probability of saving. If important nonlinearities or interactions are omitted, results may be misleading.
+
+#### Conditional independence within regions
+
+After accounting for regional effects, we assume that observations within each region are independent. If additional dependence remains, standard errors may be affected.
+
+#### Model convergence and identifiability
+
+The first step is to verify that the estimation procedure converged properly. Convergence means that the algorithm used to estimate the model successfully found a stable solution that maximizes the likelihood function. If the model does not converge, the parameter estimates and standard errors may not be reliable. We also check whether the model suffers from a “singular fit,” which occurs when the data do not contain enough information to estimate the random effects properly. This can happen when the model is too complex relative to the sample size or when variation across clusters is very small.
 
 ```{r}
-# Load package that provides model diagnostic tools
+# Load required packages
 library(performance)
+library(knitr)
 
-# Check whether model residuals follow an approximately normal distribution
-# This helps assess whether statistical inference (p-values, confidence intervals) is reliable
-check_normality(model)
+# Run convergence diagnostic on the fitted model
+# This function returns a logical value (TRUE/FALSE)
+# with an attribute containing the maximum gradient
+res <- check_convergence(modelc)
+
+# Create a clean table with meaningful labels
+# - Convert logical result into readable status
+# - Extract gradient attribute and format it
+tab <- data.frame(
+  Status = ifelse(unname(res), "Convergence achieved", "Convergence not achieved"),
+  `Maximum gradient` = signif(attr(res, "gradient"), 3)
+)
+
+# Display the table with a descriptive caption
+kable(
+  tab,
+  caption = "Model convergence diagnostics"
+)
+
 ```
 
+The logistic mixed model converged successfully. The convergence diagnostic indicates that the optimization reached a stable solution, with a gradient close to zero, suggesting no numerical issues in the estimation.
+
 ```{r}
-# Load DHARMa package for simulation-based residual diagnostics
+library(knitr)
+
+# Run the singularity test
+# This returns a logical value (TRUE/FALSE)
+sing <- lme4::isSingular(modelc, tol = 1e-4)
+
+# Display the raw test result in a clean table
+# The value itself is not modified — only formatted
+kable(
+  data.frame(`isSingular(modelc)` = sing),
+  caption = "Singularity test result"
+)
+
+```
+
+The model does not exhibit a singular fit, indicating that the random-effects variance components are identifiable and supported by the data.
+
+#### Overdispersion
+
+To ensure that the variance assumptions underlying the model are appropriate, we also assess the potential presence of overdispersion. Overdispersion occurs when the variability in the outcome is larger than what the model assumes. This may indicate that some relevant factors are missing or that the model does not fully capture heterogeneity in the data. Overdispersion can lead to underestimated standard errors and overly confident conclusions.
+
+```{r}
+# Load required packages
+library(performance)
+library(knitr)
+
+# Run overdispersion diagnostic
+overdisp <- check_overdispersion(modelc)
+
+# Convert the result into a clean 2-column table:
+# - Statistic: the name of each reported quantity
+# - Value: the corresponding numeric value
+vals <- unlist(overdisp)
+
+tab_overdisp <- data.frame(
+  Statistic = names(vals),
+  Value = as.numeric(vals),
+  row.names = NULL
+)
+
+# Present as a neatly formatted table with a caption
+kable(
+  tab_overdisp,
+  caption = "Overdispersion diagnostic "
+)
+
+```
+
+The overdispersion test does not indicate any violation of the variance assumptions, as the dispersion ratio is close to one and the null hypothesis of no overdispersion cannot be rejected (p = 0.68).
+
+#### Multicollinearity
+
+As part of the diagnostic analysis, we examine whether multicollinearity is present among the regressors. Multicollinearity refers to strong correlations between explanatory variables. When predictors are highly correlated, it becomes difficult to separate their individual effects, and coefficient estimates may become unstable.
+
+```{r}
+# Load required packages for multicollinearity diagnostics
+library(performance)
+library(knitr)
+
+# Check for multicollinearity among predictors
+#
+col_diag <- check_collinearity(modelc)
+
+# Rename columns for clearer presentation
+# This improves readability without altering results
+colnames(col_diag) <- c(
+  "Term",
+  "VIF",
+  "VIF CI (low)",
+  "VIF CI (high)",
+  "Adj. VIF",
+  "Tolerance",
+  "Tolerance CI (low)",
+  "Tolerance CI (high)"
+)
+
+
+# Display results as a formatted table with a descriptive caption
+kable(
+ col_diag,
+  caption = "Multicollinearity diagnostic "
+)
+
+
+```
+
+The multicollinearity diagnostic indicates no evidence of problematic correlations among predictors, as all variance inflation factors are close to one and tolerance values remain high.
+
+#### Overall model fit using residual diagnostics
+
+To further check whether the model fits the data well, we use simulation-based residual diagnostics. These diagnostics help us see whether the model can reproduce the patterns observed in the data. They can also highlight potential issues such as poor fit, unexplained variation, or observations that have a strong influence on the results.
+
+```{r}
 library(DHARMa)
 
-# Simulate standardized residuals from the fitted model
-# This creates residuals that are easier to interpret visually
-sim <- simulateResiduals(model1)
+# Simulate residuals
+res <- simulateResiduals(modelc, n = 1000)
 
-# Plot diagnostic graphs (QQ plot, residual patterns, uniformity check)
-# Look for absence of strong patterns or deviations
-plot(sim)
+#Global diagnostic plot 
+plot(res, title = "Figure 9: Global residual diagnostics (DHARMa)")
 
-# Run formal tests for residual problems (e.g., non-uniformity)
-testResiduals(sim)
+
 
 ```
+
+Simulation-based residual diagnostics suggest that the model fits the data reasonably well. While the uniformity test indicates a statistically significant deviation, dispersion and outlier tests do not reveal major concerns, and residuals show no systematic pattern. Overall, the results support the adequacy of the model specification.
 
 ```{r}
-library(dplyr)
-library(ggplot2)
-
-dataset <- dataset %>%
-  mutate(save_old_age = ifelse(fin17f == 1, 1, 0))
-
-ggplot(dataset, aes(
-  x = factor(remittance_any,
-             labels = c("No remittances", "Received remittances")),
-  y = save_old_age
-)) +
-  
-  # Individual observations
-  geom_jitter(width = 0.1, height = 0.02, alpha = 0.3) +
-  
-  #difference in means
-  stat_summary(
-    fun = mean,
-    geom = "line",
-    aes(group = 1),
-    color = "red",
-    linewidth = 1.2
-  ) +
-  
-  stat_summary(
-    fun = mean,
-    geom = "point",
-    color = "red",
-    size = 3
-  ) +
-  
-  scale_y_continuous(
-    breaks = c(0,1),
-    labels = c("No", "Yes")
-  ) +
-  
-  labs(
-    x = "Reception of remittances",
-    y = "Saved for old age",
-    title = "Saving for Old Age by Remittance Receipt"
-  ) +
-  
-  theme_minimal()
+#Dispersion test 
+testDispersion(res)
 
 ```
+
+The DHARMa dispersion test indicates no evidence of overdispersion (p \>0.05), suggesting that the model adequately captures the variability in the data
 
 ### Empirical Results
 
 After confirming the validity of the model through diagnostic checks, we proceed to discuss the empirical findings.
+
+```{r}
+# Load required packages
+# ggeffects is used to compute adjusted predictions from regression models
+# ggplot2 is used for visualization
+library(ggeffects)
+library(ggplot2)
+
+# Compute predicted probabilities from the model
+# Predictions are calculated while holding all other covariates constant
+pred <- ggpredict(modelc, terms = "remittance_any")
+
+# Plot the adjusted predictions
+# The plot shows how the predicted probability of saving for old age
+# varies across remittance status, controlling for other variables
+plot(pred) +
+  labs(
+    title = "Figure 10: Adjusted effect of remittances on saving for old age",
+    x = "Remittance status",
+    y = "Probability of saving for old age"
+  )
+
+```
+
+The adjusted predictions presented in Figure 10 indicate that, holding individual characteristics and regional heterogeneity constant, individuals who receive remittances exhibit a slightly lower predicted probability of saving for old age compared to those who do not receive remittances. The decline is modest but consistent, suggesting that remittance inflows may act as a partial substitute for formal retirement saving by providing an informal source of financial support. However, the relatively wide confidence intervals highlight the presence of uncertainty and potential heterogeneity across individuals and regions, implying that the magnitude of this association should be interpreted with caution and not as definitive evidence of a causal effect.
+
+To complement the graphical evidence, Table 1 presents the regression estimates, allowing a formal evaluation of the direction, magnitude, and statistical significance of the remittance effect.
 
 ```{r}
 library(lme4)
@@ -793,7 +909,7 @@ modelc <- glmer(
   save_old_age ~ remittance_any + female + educ + inc_q + urbanicity + (1 | regionwb),
   data = dataset,
   family = binomial(link = "logit")
-)S
+)
 
 # Create a regression table comparing two model specifications:
 # Baseline Model (without control variables)
@@ -814,7 +930,9 @@ modelsummary(
 
 ```
 
-Table 1 reports the estimates from the logistic mixed-effects models, with coefficients expressed as odds ratios and statistical significance assessed using p-values. The baseline specification indicates that receiving remittances is associated with significantly lower odds of saving for old age (OR = 0.891, p \< 0.001), suggesting that households relying on remittance income may have reduced incentives or capacity to accumulate precautionary or retirement savings. This negative association remains remarkably stable in the controlled specification (OR = 0.883, p \< 0.001), even after accounting for gender, education, income, and place of residence, as well as unobserved regional heterogeneity. The stability of this estimate across specifications suggests that the relationship is not primarily driven by observable compositional differences across individuals, but may instead reflect behavioral or institutional mechanisms, such as remittances acting as informal insurance or substituting for formal saving.
+Table 1 reports the estimates from the logistic mixed-effects models, with coefficients expressed as odds ratios and statistical significance assessed using p-values. The baseline model includes only the key explanatory variable of interest, remittance receipt, along with regional random effects, thereby capturing the unconditional association between remittances and saving behavior. In contrast, the controlled model incorporates additional individual-level covariates, including gender, education, income, and place of residence, allowing for a more comprehensive assessment of the relationship while accounting for observable heterogeneity.
+
+The baseline specification indicates that receiving remittances is associated with significantly lower odds of saving for old age (OR = 0.891, p \< 0.001), suggesting that households relying on remittance income may have reduced incentives or capacity to accumulate precautionary or retirement savings. This negative association remains remarkably stable in the controlled specification (OR = 0.883, p \< 0.001), even after accounting for gender, education, income, and place of residence, as well as unobserved regional heterogeneity. The stability of this estimate across specifications suggests that the relationship is not primarily driven by observable compositional differences across individuals, but may instead reflect behavioral or institutional mechanisms, such as remittances acting as informal insurance or substituting for formal saving.
 
 Turning to individual characteristics, the controlled model reveals that women have significantly higher odds of saving for old age compared to men (OR = 1.171, p \< 0.001), which may reflect differences in risk preferences, financial planning behavior, or exposure to economic vulnerability. Education exhibits a heterogeneous pattern: individuals in the lower education category have significantly lower odds of saving (OR = 0.803, p \< 0.001), consistent with lower financial literacy or income constraints, whereas those in the higher education category show a modest positive association that is only marginally significant (OR = 1.082, p \< 0.10), suggesting that higher educational attainment may encourage forward-looking financial behavior but with some uncertainty.
 
@@ -826,7 +944,7 @@ Turning to overall model fit, the controlled model exhibits lower AIC values of 
 
 Taken together, these results indicate that the inferential analysis provides support for the hypothesis that receiving remittances is negatively associated with saving for old age, while highlighting the role of socioeconomic factors and regional context in shaping saving behavior.
 
-##  **Discussion and Concluding Remarks**
+## **Discussion and Concluding Remarks**
 
 This study set out to examine whether receiving remittances is associated with saving for old age while accounting for individual characteristics and regional heterogeneity. Overall, the empirical findings provide consistent evidence of a negative association between remittance receipt and the likelihood of saving, and this relationship remains stable across model specifications. This suggests that, within the scope of the analysis, remittances may act as a substitute for formal saving or as a form of informal insurance, reducing the need for households to accumulate precautionary or retirement savings. At the same time, the results highlight the importance of socioeconomic factors, particularly income and gender, in shaping saving behavior, with higher income groups displaying a significantly greater propensity to save.
 
