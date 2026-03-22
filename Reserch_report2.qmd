@@ -1,0 +1,278 @@
+---
+title: "Second research report"
+format: 
+  html:
+    self_contained: true
+    toc: true
+    embed-resources: true
+editor: visual
+author: Romaissae Kharrab
+date: 22 Mars 2026
+---
+
+```{r setup, include=FALSE}
+
+#This chunk of code does not do anything to our data. This code basically sets up the Quarto interface (which determines how the document looks when you render it)
+#Basically, the code below determines whether the document should show the code and warning messages. 
+
+knitr::opts_chunk$set(
+  echo = TRUE,        # Don't show R code
+  results = "show",    # Don't show output by default
+  message = FALSE,     # Hide messages (e.g., from library calls)
+  warning = FALSE      # Hide warnings
+)
+```
+
+```{r}
+
+rm(list=ls()) #This line of code cleans the environment
+
+# Load libraries (or packages):
+library(tidyverse) #This library contains the most important functions you'll be using, download it everytime
+library(patchwork)  # This library is very useful to combine multiple plots into one
+#Load the dataset:
+dataset = read_csv("findex_microdata_2025.csv")
+```
+
+## Introduction
+
+The Covid-19 crisis highlighted the financial vulnerability of many households, marked by job losses, lower incomes and, for some, an inability to cover essential expenses. Yet, when facing the same shock, household trajectories differ clearly, since some households manage to absorb the shock, while others quickly fall into precariousness.
+
+Therefore, a central question arises, namely to what extent preventive financial risk management behaviors, such as saving or insurance, help households better withstand these shocks. Beyond its academic interest, this question is directly linked to financial inclusion policies, social protection and the growing role of financial tools in securing households’ economic trajectories.
+
+This hypothesis is based on the idea that a household that anticipates financial risks more is, in principle, better equipped with resources or protection mechanisms when the shock occurs. It is therefore expected that a higher level of preventive risk management will be associated with a better ability of households to cope with an income shock.
+
+## Descriptive Statistics
+
+This study uses the variable fin24b to measure financial resilience because it shows how long a household can keep covering its expenses if it loses its main source of income. We chose this variable because it directly reflects the household’s ability to cope with an income shock.
+
+```{r}
+library(tidyverse)
+library(knitr)
+
+# Recode fin24b using its value labels
+dataset <- dataset %>%
+  mutate(
+    fin24b_label = case_when(
+      fin24b == 1 ~ "Less than two weeks",
+      fin24b == 2 ~ "About one month",
+      fin24b == 3 ~ "About two months",
+      fin24b == 4 ~ "More than two months",
+      fin24b == 5 ~ "Don't know",
+      fin24b == 6 ~ "Refused",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Keep only informative categories for the descriptive analysis
+fin24b_table <- dataset %>%
+  filter(fin24b_label %in% c(
+    "Less than two weeks",
+    "About one month",
+    "About two months",
+    "More than two months"
+  )) %>%
+  count(fin24b_label) %>%
+  mutate(
+    percent = round(100 * n / sum(n), 2)
+  )
+
+# Order the categories
+fin24b_table$fin24b_label <- factor(
+  fin24b_table$fin24b_label,
+  levels = c(
+    "Less than two weeks",
+    "About one month",
+    "About two months",
+    "More than two months"
+  )
+)
+
+# Display the table using kable
+kable(
+  fin24b_table,
+  col.names = c("Expense coverage period", "Count", "Percentage"),
+  caption = "Distribution of households by ability to cover expenses after an income shock"
+)
+
+
+```
+
+```{r}
+# Visualize fin24b 
+ggplot(fin24b_table, aes(x = fin24b_label, y = percent)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = paste0(percent, "%")),
+            vjust = -0.3, size = 4) +
+  labs(
+    title = "Distribution of households by ability to cover expenses after an income shock",
+    x = "Expense coverage period",
+    y = "Percentage of households"
+  ) +
+  scale_y_continuous(limits = c(0, 100)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+Households do not all have the same level of financial resilience. The largest group can cover their expenses for more than two months after an income shock (32.95%), while 29.44% can do so for about one month. In contrast, 19.09% can cover their expenses for less than two weeks, which shows that many households are still financially vulnerable.
+
+Regarding the explanatory variable, preventive financial risk management is measured using an index that goes from 0 to 1. This index is built as the average of two indicators that show financial protection actions taken before a shock happens, such as saving during the year and making regular insurance payments. We grouped these variables into one index to capture, in a broader way, how prepared households are for a possible loss of income.
+
+```{r}
+library(tidyverse)
+
+# Recode the variables into binary values
+dataset <- dataset %>%
+  mutate(
+    save_year = ifelse(fin18 == 1, 1,
+                       ifelse(fin18 == 2, 0, NA)),
+    
+    insurance_payment = ifelse(fin19 == 1, 1,
+                               ifelse(fin19 == 2, 0, NA))
+  )
+table(dataset$save_year, useNA = "ifany")
+table(dataset$save_old_age, useNA = "ifany")
+table(dataset$insurance_payment, useNA = "ifany")
+
+# Build the index as the average of the three variables
+# Build the index as the average of the three variables
+dataset <- dataset %>%
+  mutate(
+    preventive_risk_index = ifelse(
+      is.na(save_year) |  is.na(insurance_payment),
+      NA,
+      (save_year + insurance_payment) / 2
+    )
+  )
+
+
+```
+
+```{r}
+
+library(tidyverse)
+
+# Create a table with percentages
+index_table <- dataset %>%
+  filter(!is.na(preventive_risk_index)) %>%
+  count(preventive_risk_index) %>%
+  mutate(
+    percent = 100 * n / sum(n)
+  )
+
+# Plot percentages
+ggplot(index_table, aes(x = as.factor(preventive_risk_index), y = percent)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Distribution of the preventive risk management index",
+    x = "Index value",
+    y = "Percentage of households"
+  ) +
+  theme_minimal()
+```
+
+The graph shows that most households have a preventive risk management index equal to 0, which means that they neither saved nor made regular insurance payments. A smaller share has a value of 0.5, meaning that they adopted only one of the two behaviors. Only a small proportion reaches 1, which shows that very few households combine both saving and regular insurance payments.
+
+```{r}
+library(tidyverse)
+
+# Recode fin24b with labels (if not already done)
+dataset <- dataset %>%
+  mutate(
+    fin24b_label = case_when(
+      fin24b == 1 ~ "Less than two weeks",
+      fin24b == 2 ~ "About one month",
+      fin24b == 3 ~ "About two months",
+      fin24b == 4 ~ "More than two months",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Create proportions by index
+plot_data <- dataset %>%
+  filter(!is.na(fin24b_label), !is.na(preventive_risk_index)) %>%
+  count(preventive_risk_index, fin24b_label) %>%
+  group_by(preventive_risk_index) %>%
+  mutate(percent = 100 * n / sum(n))
+
+# Plot
+ggplot(plot_data, aes(x = fin24b_label, y = percent, fill = fin24b_label)) +
+  geom_col() +
+  facet_wrap(~ preventive_risk_index) +
+  labs(
+    title = "Financial resilience by preventive risk management level",
+    x = "Financial resilience category",
+    y = "Percentage of households",
+    fill = "Category"
+  ) +
+  scale_y_continuous(limits = c(0, 50), breaks = seq(0, 100, 10)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+```
+
+The graph shows a clear relationship between preventive risk management and financial resilience. As the index increases, the share of households in the highest resilience category (More than two months) also increases, while the share of households in the lowest category (Less than two weeks) decreases. This suggests that households who adopt more preventive financial behaviors are better able to cope with an income shock. Overall, the pattern supports the idea of a positive link between preventive risk management and financial resilience.
+
+## Statistical Inference
+
+```{r}
+library(modelsummary)
+# Convert fin24b into an ordered factor
+dataset <- dataset %>%
+  mutate(
+    fin24b_ord = factor(
+      fin24b,
+      levels = c(1, 2, 3, 4),
+      labels = c(
+        "Less than two weeks",
+        "About one month",
+        "About two months",
+        "More than two months"
+      ),
+      ordered = TRUE
+    )
+  )
+
+model_lpm <- lm(
+  as.numeric(fin24b_ord) ~ preventive_risk_index + age + female + educ + inc_q,
+  data = dataset
+)
+# Display results using modelsummary
+
+modelsummary(
+  model_lpm,
+  stars = TRUE,
+  title = "Effect of preventive risk management on financial resilience",
+  coef_map = c(
+    "preventive_risk_index" = "Preventive risk index",
+    "age" = "Age",
+    "female" = "Gender",
+    "educ" = "Education",
+    "inc_q" = "Income quintile"
+  ),
+  gof_map = c("nobs", "r.squared")
+)
+```
+
+```{r}
+# Convert variables into factors (simple version)
+dataset$female <- factor(dataset$female)
+dataset$educ   <- factor(dataset$educ)
+dataset$inc_q  <- factor(dataset$inc_q)
+
+# Create numeric dependent variable
+dataset$fin24b_num <- as.numeric(dataset$fin24b)
+
+# Run regression (without extra filtering)
+model_lpm <- lm(
+  fin24b_num ~ preventive_risk_index + age + female + educ + inc_q,
+  data = dataset
+)
+
+# Display results
+library(modelsummary)
+
+modelsummary(model_lpm)
+```
