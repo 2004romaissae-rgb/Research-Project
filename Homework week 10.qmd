@@ -1,0 +1,322 @@
+---
+title: "Week 10"
+format: 
+  html:
+    self_contained: true
+    toc: true
+    embed-resources: true
+editor: visual
+author: Romaissae Kharrab
+date: 22 Mars 2026
+---
+
+```{r setup, include=FALSE}
+
+#This chunk of code does not do anything to our data. This code basically sets up the Quarto interface (which determines how the document looks when you render it)
+#Basically, the code below determines whether the document should show the code and warning messages. 
+
+knitr::opts_chunk$set(
+  echo = TRUE,        # Don't show R code
+  results = "show",    # Don't show output by default
+  message = FALSE,     # Hide messages (e.g., from library calls)
+  warning = FALSE      # Hide warnings
+)
+```
+
+### Question 1:
+
+La fonction permet d'évaluer en une seule étapes toutes les hypothèses essentielles pour la validation du modèle à l'aide d'un diagnostic visuel. Elle est efficace car elle s'adapte au type du modèle ainsi elle fournit une analyse plus intuitive que les tests séparés.
+
+### Question 2:
+
+```{r}
+rm(list=ls()) #This line of code cleans the environment
+
+# Load libraries (or packages):
+library(tidyverse) #This library contains the most important functions you'll be using, download it everytime
+library(patchwork)  # This library is very useful to combine multiple plots into one
+#Load the dataset:
+dataset = read_csv("diabetes_subsample.csv")
+```
+
+```{r}
+library(performance)
+library(easystats)
+library(SEA)
+# Estimation du modèle de régression logistique
+model <- lm(blood_glucose_level ~ bmi, data = dataset)
+
+check_model(model)
+
+```
+
+Les graphiques de diagnostic indiquent que le modèle fournit une approximation raisonnable de la relation entre (BMI) et le niveau de glucose sanguin, mais plusieurs hypothèses ne sont que partiellement satisfaites. Le graphique de linéarité met en évidence une légère courbure, suggérant une relation non linéaire. Le graphique d’homoscédasticité révèle une hétéroscédasticité modérée, avec une variance qui augmente aux niveaux élevés des valeurs ajustées. Le graphique de normalité montre des écarts à la normalité, en particulier dans les queues de distribution. Toutefois, aucune observation fortement influente n’est détectée. Dans l’ensemble, le modèle est exploitable mais n’est pas totalement fiable, et une spécification plus flexible permettrait d’améliorer l’ajustement
+
+## Section 2
+
+```{r}
+# Charger le package pour présenter les résultats de régression
+library(modelsummary)
+# Estimation du modèle de régression logistique
+model2 <- glm(diabetes ~ bmi + age + gender, data = dataset, family = binomial(link = logit) )
+# Présentation des résultats
+modelsummary(
+  model2,
+  exponentiate = TRUE,
+  stars = TRUE,
+  title = "Tableau : Résultats de la régression logistique expliquant la probabilité de diabète"
+)
+```
+
+Le modèle montre que le BMI et l’âge sont les deux facteurs les plus importants pour expliquer le diabète. Une augmentation d’une unité de BMI augmente les chances d’avoir le diabète d’environ 8,5 %, et chaque année supplémentaire augmente ces chances d’environ 5,3 %. Ainsi, le fait d’être un homme augmente aussi les chances de diabète d’environ 64 % par rapport aux femmes, ce qui indique une différence liée au genre. En outre, l’intercept est égal à 0, ce signifie que les chances de diabète sont presque nulles quand toutes les variables valent 0, mais cette situation est irréaliste. Donc, l’intercept n’a pas d’interprétation concrète et sert de point de référence mathématique.
+
+### Question 4
+
+### Question 5
+
+```{r}
+# Charger le package pour présenter les résultats 
+library(modelsummary)
+# Modèle de probabilité linéaire
+model3 <- lm(diabetes ~ bmi + age + gender, data = dataset)
+
+# Présentation des résultats
+modelsummary(
+  model3,
+  stars = TRUE,
+  title = "Tableau : Modèle de probabilité linéaire expliquant la probabilité de diabète"
+)
+
+```
+
+Le modèle montre que le BMI et l’âge ont un effet positif et significatif sur la probabilité de diabète. Une augmentation d’une unité de BMI augmente la probabilité de diabète de 0,5 point de pourcentage, tandis qu’une année supplémentaire d’âge augmente cette probabilité de 0,3 point de pourcentage. Ainsi, le fait d’être un homme augmente la probabilité de diabète d’environ 3,8 points de pourcentage par rapport aux femmes, ce qui indique un effet de genre modéré. En revanche, la catégorie other n’a pas d’effet significatif.
+
+Oui, c’est plus facile à comprendre, car les coefficients s’interprètent directement en probabilité.
+
+```{r}
+# Charger la bibliothèque pour la visualisation
+library(ggplot2)
+
+# Créer un graphique pour visualiser la relation entre BMI et diabète
+ggplot(dataset, aes(x = bmi, y = diabetes)) +
+  
+  # Ajouter les points individuels (chaque observation)
+  geom_point(alpha = 0.2) + 
+  
+  # Ajouter la droite de régression du modèle linéaire (LPM)
+  geom_smooth(method = "lm", se = TRUE) + 
+  
+  # Ajouter un titre explicite
+  labs(title = "Relation entre BMI et probabilité de diabète (modèle linéaire)")
+```
+
+Non, cela ne fait pas toujours sens. La droite de régression descend en dessous de 0 pour les faibles valeurs de BMI ce qui correspond à des probabilités impossibles. Cela illustre une limite du modèle linéaire de probabilité, qui ne respecte pas la contrainte que les probabilités doivent être comprises entre 0 et 1.
+
+```{r}
+library(marginaleffects)
+library(knitr)
+
+# Supposons que ton modèle logit s'appelle logit_model
+ame <- avg_slopes(model2)
+
+# Voir les résultats
+kable(
+  ame,
+  digits = 3,
+  caption = "Average Marginal Effects on the Probability of Diabetes"
+)
+```
+
+Les effets marginaux moyens indiquent que le BMI et l’âge ont tous deux un impact positif et statistiquement significatif sur la probabilité de diabète. Plus précisément, une augmentation d’une unité du BMI accroît cette probabilité d’environ 0,6 point de pourcentage, tandis qu’une année supplémentaire l’augmente de 0,4 point de pourcentage. Des différences apparaissent également selon le genre, les hommes présentent une probabilité de diabète supérieure de 3,7 points de pourcentage par rapport aux femmes, tandis que les individus de la catégorie Other ont une probabilité plus faible. Ces résultats sont directement interprétables en termes de probabilité, ce qui les rend nettement plus clairs et intuitifs que les odds ratios.
+
+### Question 6
+
+```{r}
+library(ggplot2)
+
+# 1. The Linear Approach (Straight line)
+p1 <- ggplot(dataset, aes(x = bmi, y = diabetes)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "Linear Probability Model", subtitle = "A straight line for a binary outcome")
+
+p1
+```
+
+```{r}
+# 2. The Logistic Approach (S-Curve)
+p2 <- ggplot(dataset, aes(x = bmi, y = diabetes)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), color = "red") +
+  labs(title = "Logistic Model", subtitle = "The S-curve (sigmoïd)")
+p2
+
+```
+
+Le modèle linéaire montre une relation positive entre le BMI et le diabète, suggérant qu’une hausse du BMI augmente la probabilité d’être diabétique. Or, il reste mal adapté car il impose une relation linéaire et peut produire des probabilités inférieures à 0 ou supérieures à 1. À l’inverse, le modèle logistique capture une relation non linéaire plus réaliste, où la probabilité augmente progressivement avec le BMI selon une courbe en S et reste toujours comprise entre 0 et 1, ce qui en fait un modèle plus approprié pour une variable binaire.
+
+```{r}
+library(marginaleffects)
+# Visualizing the effect of BMI while "controlling" for Age and Gender
+#Linear model:
+model_lin <- lm(diabetes ~ bmi + age + gender, data = dataset)
+plot_predictions(model_lin, condition = "bmi") +
+  ylim(0, 1) +
+  labs(
+    title = "Adjusted Predictions of Diabetes",
+    subtitle = "Holding Age and Gender at their mean/mode",
+    y = "Predicted Probability of Diabetes",
+    x = "BMI"
+  )
+
+
+
+
+
+```
+
+```{r}
+#Logistic:
+model_log <- glm(diabetes ~ bmi + age + gender, family = binomial, data = dataset)
+plot_predictions(model_log, condition = "bmi") +
+  ylim(0, 1) +
+  labs(
+    title = "Adjusted Predictions of Diabetes",
+    subtitle = "Holding Age and Gender at their mean/mode",
+    y = "Predicted Probability of Diabetes",
+    x = "BMI"
+  )
+```
+
+Les deux graphiques montrent la relation entre le BMI et la probabilité de diabète en gardant l’âge et le genre constants. On voit que plus le BMI augmente, plus le risque augmente, mais les probabilités restent plus faibles et plus réalistes que dans les graphiques précédents. Dans le modèle linéaire, la relation est une droite simple, tandis que dans le modèle logistique, la probabilité augmente lentement puis plus rapidement pour les BMI élevés, ce qui est plus cohérent. Ces graphiques sont plus fiables car ils montrent l’effet du BMI seul, sans être influencés par l’âge ou le genre.
+
+### Question 7
+
+Le plus simple serait de montrer un graphique avec les probabilités prédites du diabète selon le BMI, en gardant les autres variables constantes. Comme ça, les gens voient directement comment le risque change quand le BMI augmente. C’est plus clair que de donner des odds ratios ou des coefficients, parce que ce sont des résultats plus difficiles à comprendre. Pour une agence de santé, il vaut donc mieux parler en termes de probabilité de diabète et montrer un graphique ajusté, car c’est ce qui est le plus facile à lire et à expliquer.
+
+## Section 2
+
+### Question 8
+
+Les intervalles de confiance bootstrap sont surtout utiles dans les situations où les méthodes classiques deviennent moins fiables. D’abord, ils sont très pratiques quand on a un petit échantillon, car les méthodes habituelles marchent mieux quand on a beaucoup de données. Ensuite, ils sont aussi intéressants quand il y a des valeurs extrêmes, parce qu’un outlier peut rendre l’intervalle classique absurde ou peu crédible, alors que le bootstrap donne souvent un résultat plus réaliste. C’est aussi une bonne option quand les données ne suivent pas une distribution régulière, par exemple quand elles sont asymétriques, quand il existe des seuils naturels, quand il y a beaucoup de valeurs extrêmes, ou quand on mélange des groupes très différents. En plus, le bootstrap est utile quand on veut répondre à des questions concrètes, comme estimer une proportion, un scénario défavorable, ou une statistique un peu plus compliquée pour laquelle il n’existe pas de formule simple. Il aide aussi à mieux montrer l’incertitude, par exemple avec un histogramme, ce qui est souvent plus parlant qu’une simple p-value. Enfin, quand les gens comprennent mal les p-values, le bootstrap peut donner une mesure plus intuitive.
+
+### Question 9
+
+```{r}
+hist(dataset$blood_glucose_level)
+```
+
+```{r}
+library(tidyverse)
+
+# STEP 1: Create an empty "bucket" (vector) to hold our results
+# We will do this 500 times
+n_iterations <- 500
+glucose_estimates <- numeric(n_iterations)
+
+# STEP 2: The Loop (The "Manual" work)
+for (i in 1:n_iterations) {
+  
+  # A. Create a "Resample" (Pick rows at random with replacement)
+  boot_data <- dataset[sample(nrow(dataset), replace = TRUE), ]
+  
+  # B. Run the model on THIS specific simulated dataset
+  boot_model <- glm(diabetes ~ blood_glucose_level + age, 
+                    family = "binomial", data = boot_data)
+  
+  # C. Save the Glucose coefficient into our "bucket" at position i
+  glucose_estimates[i] <- coef(boot_model)["blood_glucose_level"]
+  
+  # For pedagogu: Print progress every 100 times so students see it working
+  if(i %% 100 == 0) print(paste("Simulation number", i, "complete!"))
+}
+
+# STEP 3: Turn the bucket into a table for plotting
+results_df <- data.frame(estimate = glucose_estimates)
+
+
+# STEP 4: Visualize the results
+# 1. First, get the "Original Result" from your main model
+model_glucose = glm(diabetes ~ blood_glucose_level + age, 
+                    family = "binomial", data = dataset)
+original_slope <- coef(model_glucose)["blood_glucose_level"]
+
+# 2. Plot the histogram
+ggplot(results_df, aes(x = estimate)) +
+  # The bars: represent the 500 "simulated" worlds
+  geom_histogram(fill = "firebrick", color = "white", bins = 30) +
+  # The line: represents the "original" result from our real data
+  geom_vline(xintercept = original_slope, 
+             color = "blue", 
+             linewidth = 1.5, 
+             linetype = "dashed") + 
+  
+  # Add a label to know what the blue line is
+  annotate("text", x = original_slope, y = 10, label = "Original Estimate", 
+           color = "blue", angle = 90, vjust = -0.5, fontface = "bold") +
+  
+  labs(title = "The Bootstrap Distribution",
+       subtitle = "The blue dashed line is our original model result",
+       x = "Effect size of Blood Glucose (Slope)",
+       y = "How many times it happened in 500 tries") +
+  theme_minimal()
+```
+
+Ce code refait la même analyse 500 fois pour vérifier si l’effet de blood_glucose_level sur le diabète est stable. À chaque répétition, il crée d’abord un nouvel échantillon à partir des données de départ en tirant les lignes au hasard avec remise, ce qui permet de simuler plusieurs versions possibles du même jeu de données. Ensuite, il estime un modèle logistique avec diabetes comme variable dépendante et blood_glucose_level ainsi que age comme variables explicatives, puis il garde seulement le coefficient de blood_glucose_level. Après avoir répété cela 500 fois, il rassemble tous les coefficients obtenus dans un tableau. Puis, il estime une dernière fois le modèle sur les données originales pour obtenir le coefficient de référence. Enfin, il trace un histogramme qui montre comment les 500 coefficients bootstrap sont répartis, avec une ligne bleue qui indique le résultat original. Cela permet de voir si l’effet de blood_glucose_level reste à peu près le même d’un échantillon à l’autre ou s’il varie beaucoup.
+
+Le graphique montre que la plupart des valeurs sont regroupées autour d’un effet positif, et la ligne bleue du modèle original se trouve bien au centre de cette distribution, ce qui veut dire que le résultat initial est cohérent avec les échantillons bootstrap. Ainsi, presque toutes les estimations sont au-dessus de zéro, donc l’effet de blood glucose semble clairement positif. Par ailleurs, plus le niveau de glucose dans le sang augmente, plus la probabilité d’avoir le diabète augmente, et ce résultat paraît assez stable.
+
+### Question 10
+
+Avec ce jeu de données, une question de recherche pertinente serait : les personnes souffrant d’hypertension ont-elles une probabilité plus élevée d’être diabétiques que celles qui n’en souffrent pas ? Notre hypothèse est que l’hypertension est positivement associée au diabète.
+
+```{r}
+library(tidyverse)
+
+# STEP 1: Create an empty vector to store the hypertension coefficients
+# We will repeat the analysis 500 times
+n_iterations <- 500
+hypertension_estimates <- numeric(n_iterations)
+
+# STEP 2: The loop
+for (i in 1:n_iterations) {
+  
+  # A. Create a bootstrap sample (sample rows with replacement)
+  boot_data <- dataset[sample(nrow(dataset), replace = TRUE), ]
+  
+  # B. Run the logistic regression on this bootstrap sample
+  boot_model <- glm(diabetes ~ hypertension + age, 
+                    family = "binomial", data = boot_data)
+  
+  # C. Save the coefficient of hypertension
+  hypertension_estimates[i] <- coef(boot_model)["hypertension"]
+  
+  # Print progress every 100 iterations
+  if(i %% 100 == 0) print(paste("Simulation number", i, "complete!"))
+}
+
+# STEP 3: Put the results into a data frame
+results_df <- data.frame(estimate = hypertension_estimates)
+
+# STEP 4: Get the original result from the main model
+model_hypertension <- glm(diabetes ~ hypertension + age, 
+                          family = "binomial", data = dataset)
+original_slope <- coef(model_hypertension)["hypertension"]
+
+# STEP 5: Plot the bootstrap distribution
+ggplot(results_df, aes(x = estimate)) +
+  geom_histogram(fill = "firebrick", color = "white", bins = 30) +
+  geom_vline(xintercept = original_slope, 
+             color = "blue", 
+             linewidth = 1.5, 
+             linetype = "dashed") + 
+  annotate("text", x = original_slope, y = 10, label = "Original Estimate", 
+           color = "blue", angle = 90, vjust = -0.5, fontface = "bold") +
+  labs(title = "Bootstrap Distribution",
+       subtitle = "The blue dashed line is the original model result",
+       x = "Effect size of Hypertension",
+       y = "Frequency in 500 bootstrap samples") +
+  theme_minimal()
+```
+
+Le graphique montre que l’effet de l’hypertension sur le diabète est positif. Les coefficients bootstrap sont concentrés autour de 1.4 à 1.6, et la ligne bleue du modèle original se trouve dans la même zone. Cela montre que le résultat est stable et cohérent. On peut donc conclure que l’hypertension est associée à une probabilité plus élevée d’avoir le diabète.
